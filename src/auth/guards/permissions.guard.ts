@@ -63,8 +63,10 @@ export class PermissionsGuard implements CanActivate {
       WHERE ur.user_id = ? AND r.name = 'super_admin'
     `, [userId]);
 
-        return result && result.count > 0;
+        // !! forces the expression to a boolean (true if count > 0, false if result is null/undefined)
+        return !!(result && result.count > 0);
     }
+
 
     private async getUserPermissions(userId: number): Promise<string[]> {
         const permissions = await this.databaseService.query<{ name: string }>(`

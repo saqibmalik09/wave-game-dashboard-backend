@@ -6,7 +6,6 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
-
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
@@ -34,7 +33,7 @@ export class AuthController {
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Get current user profile with roles and permissions' })
-    async getProfile(@CurrentUser() user: any) {
+    async getProfile(@CurrentUser() user: any): Promise<any> { // 2. Explicitly define return type
         const userWithPermissions = await this.authService.getUserWithPermissions(
             user.id,
         );

@@ -42,14 +42,14 @@ export class PermissionsController {
         @Query('resource') resource?: string,
         @Query('page', ParseIntPipe) page: number = 1,
         @Query('limit', ParseIntPipe) limit: number = 20,
-    ) {
+    ): Promise<any> {
         return this.permissionsService.findAll(resource, page, limit);
     }
 
     @Get(':id')
     @Permissions('permission.read')
     @ApiOperation({ summary: 'Get permission by ID' })
-    findOne(@Param('id', ParseIntPipe) id: number) {
+    findOne(@Param('id', ParseIntPipe) id: number): Promise<any> {
         return this.permissionsService.findOne(id);
     }
 
@@ -59,14 +59,14 @@ export class PermissionsController {
     update(
         @Param('id', ParseIntPipe) id: number,
         @Body() updatePermissionDto: UpdatePermissionDto,
-    ) {
+    ): Promise<any> {
         return this.permissionsService.update(id, updatePermissionDto);
     }
 
     @Delete(':id')
     @Permissions('permission.delete')
     @ApiOperation({ summary: 'Delete permission' })
-    remove(@Param('id', ParseIntPipe) id: number) {
+    remove(@Param('id', ParseIntPipe) id: number): Promise<any> {
         return this.permissionsService.remove(id);
     }
 }

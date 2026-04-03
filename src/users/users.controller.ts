@@ -31,7 +31,7 @@ export class UsersController {
     findAll(
         @Query('page', ParseIntPipe) page: number = 1,
         @Query('limit', ParseIntPipe) limit: number = 10,
-    ) {
+    ): Promise<any> {
         return this.usersService.findAll(page, limit);
     }
 
