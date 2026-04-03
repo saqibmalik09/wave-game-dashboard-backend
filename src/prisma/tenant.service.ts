@@ -1,5 +1,5 @@
 // src/prisma/tenant.service.ts
-import { PrismaClient as TenantPrisma } from '../../prisma/generated/tenant';
+import { PrismaClient as TenantPrisma } from '@prisma/client-tenant';
 
 export async function getTenantPrisma(org: {
   dbUser: string;

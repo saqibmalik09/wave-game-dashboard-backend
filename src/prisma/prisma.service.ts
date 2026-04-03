@@ -1,6 +1,6 @@
 // src/prisma/prisma.service.ts
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
-import { PrismaClient as MasterPrisma } from '../../prisma/generated/master';
+import { PrismaClient as MasterPrisma } from '@prisma/client-master';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 

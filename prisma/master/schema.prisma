@@ -1,6 +1,6 @@
   generator client {
     provider = "prisma-client-js"
-    output   = "../generated/master"
+    output   = "../../node_modules/@prisma/client-master"
     binaryTargets = ["native", "debian-openssl-3.0.x"]
     shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
   }
