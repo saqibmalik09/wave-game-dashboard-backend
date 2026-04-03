@@ -1,0 +1,67 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: wave-games-backend-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: wave-games-database
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - app-network
+  
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: wave-games-phpmyadmin
+    restart: always
+    ports:
+     - "9094:80"
+    environment:
+     PMA_HOST: mysql
+     PMA_PORT: 3306
+     MYSQL_USER: electronicwave
+     MYSQL_PASSWORD: "saqibmalik00999S@#$$S"
+     UPLOAD_LIMIT: 500M 
+     MAX_EXECUTION_TIME: 3600
+    depends_on:
+     - mysql
+    networks:
+     - app-network
+
+
+  redis:
+    image: redis:latest
+    container_name: wave-games-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: [
+        "redis-server",
+        "--appendonly", "yes",
+        "--replica-read-only", "no",
+        "--protected-mode", "no"
+      ]
+    networks:
+      - app-network
+
+
+  redisinsight:
+    image: redislabs/redisinsight:latest
+    container_name: wave-games-redisinsight
+    restart: always
+    ports:
+      - "8002:5540"  
+    depends_on:
+      - redis
+    networks:
+      - app-network
+  
+volumes:
+  mysql-data:
+
+networks:
+  app-network:
+    driver: bridge

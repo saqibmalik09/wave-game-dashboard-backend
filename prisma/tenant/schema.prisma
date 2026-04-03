@@ -1,0 +1,46 @@
+datasource db {
+  provider = "mysql"
+  url      = env("TENANT_DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/tenant"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+
+}
+
+model User {
+  id        Int     @id @default(autoincrement())
+  email     String  @unique
+  username  String?
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  bets Bet[]
+
+  @@index([email])
+  @@index([username])
+}
+
+model Bet {
+  id        Int     @id @default(autoincrement())
+  userId    Int
+  gameId    Int
+  bet       String?
+  type      Int?   
+  appKey    String?
+  winningPercentage    Int?
+  isRewarded   Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation
+  user User @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([gameId])
+  @@index([appKey])
+}

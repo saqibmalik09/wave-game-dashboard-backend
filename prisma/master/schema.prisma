@@ -1,0 +1,189 @@
+  generator client {
+    provider = "prisma-client-js"
+    output   = "../generated/master"
+    binaryTargets = ["native", "debian-openssl-3.0.x"]
+    shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+  }
+
+  datasource db {
+    provider = "mysql"
+    url      = env("MASTER_DATABASE_URL")
+  }
+
+  model Organization {
+    id             Int             @id @default(autoincrement())
+    name           String
+    email          String          @unique
+    dbHost         String
+    dbName         String
+    dbUser         String
+    dbPassword     String
+    status         String          @default("active")
+    createdAt      DateTime        @default(now())
+    updatedAt      DateTime        @updatedAt
+
+    administrators Administrator[]
+  }
+
+  model Administrator {
+    id             Int           @id @default(autoincrement())
+    email          String        @unique
+    password       String        @default("goldenSand")
+    role           String        @default("superadmin")
+    organizationId Int
+    createdAt      DateTime      @default(now())
+    updatedAt      DateTime      @updatedAt
+
+    organization   Organization  @relation(fields: [organizationId], references: [id])
+  }
+
+  model User {
+    id        Int      @id @default(autoincrement())
+    userId    String?  
+    name      String?  
+    appKey    String?
+    totalGamePlayed  Int   @default(0)
+    gameWon  Int   @default(0)
+    gameLost  Int   @default(0)  
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    @@index([appKey])
+  }
+  model Game {
+    id                Int      @id @default(autoincrement())
+    name              String
+    description       String?
+    appKey            String   @unique
+    status            String   @default("active")
+    config            Json?
+    createdAt         DateTime @default(now())
+    updatedAt         DateTime @updatedAt
+  }
+    model GameSettings {
+    id                Int      @id @default(autoincrement())
+    appKey            String?   @unique
+    gameId            Int
+    winningPercentage Json?
+    winningMultiplier Json?
+    maxBetLimit       Int?     @default(500000)
+    currentRoundID    Int     @default(10)
+    createdAt         DateTime @default(now())
+    updatedAt         DateTime @updatedAt
+  }
+
+
+  model Bet {
+    id        Int      @id @default(autoincrement())
+    gameId    Int
+    userId    String?      // must match User.id type
+    bet       Int?
+    type      Int?
+    winningPercentage      Int?
+    isRewarded             Int?
+    appKey    String?
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt 
+    @@index([gameId])
+    @@index([userId])
+  }
+    model AllBet {
+    id        Int      @id @default(autoincrement())
+    gameId    Int
+    userId    String?      // must match User.id type
+    bet       Int?
+    type      Int?
+    winningPercentage      Int?
+    isRewarded             Int?
+    appKey    String?
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt 
+    @@index([gameId])
+    @@index([userId])
+  }
+
+  model GameOngoingUsers {
+    id        Int      @id @default(autoincrement())
+    userId    String   @unique
+    gameId    Int? 
+    name      String?  
+    balance   String?  
+    appKey    String? 
+    token     String?  @db.Text
+    connectionUserId     String?  
+    socketId   String?
+    profilePicture String? 
+    totalGamePlayed  Int   @default(0)
+    gameWon  Int   @default(0)
+    gameLost  Int   @default(0)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    @@index([appKey])
+  }
+  model OngoingTeenpattiGame {
+    id             Int      @id @default(autoincrement())
+    potIndex       Int?
+    potName       String?
+    appKey         String?
+    userId         String?
+    amount         Int?
+    type           Int?
+    createdAt      DateTime @default(now())
+    updatedAt      DateTime @updatedAt
+  }
+
+  model teenPattiGamePlayingHistory {
+    id             Int      @id @default(autoincrement())
+    potIndex       Int?
+    amount         Int?
+    appKey         String?
+    type           Int?
+    createdAt      DateTime @default(now())
+    updatedAt      DateTime @updatedAt
+  }
+
+    model AllGamesWinningCombinations {
+    id        Int      @id @default(autoincrement())
+    gameId    Int
+    winningPotIndex Int?
+    winningPotImageURL String?
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt 
+    @@index([gameId])
+  }
+
+    model OngoingGreedyGame {
+    id             Int      @id @default(autoincrement())
+    potIndex       Int?
+    potName       String?
+    appKey         String?
+    userId         String?
+    amount         Int?
+    type           Int?
+    createdAt      DateTime @default(now())
+    updatedAt      DateTime @updatedAt
+  }
+
+    model greedyGamePlayingHistory {
+    id             Int      @id @default(autoincrement())
+    potIndex       Int?
+    amount         Int?
+    appKey         String?
+    type           Int?
+    createdAt      DateTime @default(now())
+    updatedAt      DateTime @updatedAt
+  }
+
+  model GameWinnersRecord {
+    id             Int      @id @default(autoincrement())
+    gameId         Int?
+    userId         Int?
+    roundId        Int?
+    potIndex       Int?
+    amount         Int?
+    appKey         String?
+    type           Int?
+    isRewarded      Int? 
+    message         String?     
+    createdAt      DateTime @default(now())
+    updatedAt      DateTime @updatedAt
+  }
