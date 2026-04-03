@@ -75,7 +75,7 @@ export class AuthService {
         };
     }
 
-    async login(loginDto: LoginDto) {
+    async login(loginDto: LoginDto): Promise<any> {
         // Find user by username
         const user = await this.databaseService.queryOne<User>(
             'SELECT * FROM users WHERE username = ?',
@@ -132,13 +132,14 @@ export class AuthService {
 
             const accessToken = this.jwtService.sign(
                 {
-                    sub: user.id,
+                    sub: String(user.id), // Ensure sub is a string if your library expects it
                     username: user.username,
                     email: user.email,
                 },
                 {
                     secret: this.configService.get<string>('JWT_SECRET'),
-                    expiresIn: this.configService.get<string>('JWT_EXPIRES_IN', '1h'),
+                    // Use 'as any' to satisfy the strict StringValue type requirement
+                    expiresIn: (this.configService.get<string>('JWT_EXPIRES_IN') || '1h') as any,
                 },
             );
 
@@ -201,13 +202,13 @@ export class AuthService {
         };
 
         const accessToken = this.jwtService.sign(payload, {
-            secret: this.configService.get<string>('JWT_SECRET'),
-            expiresIn: this.configService.get<string>('JWT_EXPIRES_IN', '1h'),
+            secret: this.configService.get<string>('JWT_SECRET') || 'your-fallback-secret',
+            expiresIn: (this.configService.get<string>('JWT_EXPIRES_IN') || '1h') as any,
         });
 
         const refreshToken = this.jwtService.sign(payload, {
-            secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-            expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN', '7d'),
+            secret: this.configService.get<string>('JWT_REFRESH_SECRET') || 'your-refresh-fallback',
+            expiresIn: (this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d') as any,
         });
 
         return {
