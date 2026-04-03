@@ -7,7 +7,7 @@ import { join } from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  
+
   // Enable CORS for WebSocket
   app.enableCors({
     origin: '*',
@@ -28,7 +28,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document); // http://127.0.0.1:5005/api
 
-  const PORT = process.env.PORT || 5005;
+  const PORT = process.env.PORT || 5080;
   await app.listen(PORT);
 
   console.log(`✅ Application is running on: http://127.0.0.1:${PORT}`);
