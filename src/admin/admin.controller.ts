@@ -359,6 +359,84 @@ export class AdminController {
     };
   }
 
+  @Post('report/realtime-rtp')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Realtime RTP / house profit from Bet table' })
+  async realtimeRtp(@Body() body: { appKey: string; gameId?: number }) {
+    if (!body?.appKey) {
+      return { success: false, message: 'appKey is required' };
+    }
+    const data = await this.adminService.realtimeRtp(
+      body.appKey,
+      body.gameId != null ? Number(body.gameId) : undefined,
+    );
+    return {
+      success: true,
+      message: 'Realtime RTP fetched successfully',
+      data,
+    };
+  }
+
+  @Post('report/overall')
+  @HttpCode(HttpStatus.OK)
+  async overallReport(@Body() body: AppKeyDto) {
+    if (!body?.appKey) {
+      return { success: false, message: 'appKey is required' };
+    }
+    const data = await this.adminService.overallReport(body.appKey);
+    return { success: true, message: 'Overall report fetched', data };
+  }
+
+  @Post('report/users-by-appkey')
+  @HttpCode(HttpStatus.OK)
+  async usersByAppKey(@Body() body: AppKeyDto) {
+    if (!body?.appKey) {
+      return { success: false, message: 'appKey is required' };
+    }
+    const data = await this.adminService.usersByAppKey(body.appKey);
+    return { success: true, message: 'Users fetched', data };
+  }
+
+  @Post('report/bets-by-appkey')
+  @HttpCode(HttpStatus.OK)
+  async betsByAppKey(@Body() body: { appKey: string; limit?: number }) {
+    if (!body?.appKey) {
+      return { success: false, message: 'appKey is required' };
+    }
+    const data = await this.adminService.betsByAppKey(
+      body.appKey,
+      body.limit ?? 10000,
+    );
+    return { success: true, message: 'Bets fetched', data };
+  }
+
+  @Post('billing/report')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Billing settlement from Bet / AllBet tables' })
+  async billingReport(
+    @Body()
+    body: {
+      organizationId: number;
+      appKeyMode: 'production' | 'testing' | 'both';
+      table: 'Bet' | 'AllBet';
+      from: string;
+      to: string;
+      organizationProfitPercent?: number;
+      companyProfitPercent?: number;
+      discountPercent?: number;
+    },
+  ) {
+    try {
+      const data = await this.adminService.billingReport(body);
+      return { success: true, message: 'Billing report generated', data };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Billing failed',
+      };
+    }
+  }
+
 
   @Post('report/clear-all-bet')
   @HttpCode(HttpStatus.OK)

@@ -17,6 +17,12 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { masterPrisma } from 'src/prisma/masterClient';
+import { BetStatsService } from './bet-stats.service';
+import {
+  enrichOrganization,
+  resolveAppKeysForOrg,
+} from './org-metadata.config';
+import { summarizeGames } from './bet-stats.util';
 
 
 @WebSocketGateway({
@@ -26,7 +32,10 @@ import { masterPrisma } from 'src/prisma/masterClient';
 })
 @Injectable()
 export class AdminService implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
-  constructor(private readonly master: PrismaService) { }
+  constructor(
+    private readonly master: PrismaService,
+    private readonly betStats: BetStatsService,
+  ) { }
   @WebSocketServer()
   server: Server;
 
@@ -100,9 +109,10 @@ export class AdminService implements OnGatewayInit, OnGatewayConnection, OnGatew
   async getAllOrganizations() {
     try {
       const orgs = await this.master.organization.findMany();
+      const enriched = orgs.map((org) => enrichOrganization(org));
       return successResponse(
         'Organizations fetched successfully',
-        orgs,
+        enriched,
         HttpStatus.OK,
       );
     } catch (error) {
@@ -350,82 +360,219 @@ export class AdminService implements OnGatewayInit, OnGatewayConnection, OnGatew
   }
 
   public async gameStatistics(appKey: string) {
-    const rows = await masterPrisma.bet.groupBy({
-      by: ['gameId', 'type'],
-      where: {
-        appKey
-      },
-      _sum: {
-        bet: true
-      },
-      _count: {
-        _all: true
-      }
-    });
-  
-    const gameMap: Record<number, any> = {};
-  
-    for (const row of rows) {
-      const gameId = row.gameId;
-  
-      if (!gameMap[gameId]) {
-        gameMap[gameId] = {
-          gameId,
-          totalBetAmount: 0,
-          totalPayoutAmount: 0,
-          totalBets: 0
-        };
-      }
-  
-      if (row.type === 1) {
-        gameMap[gameId].totalBetAmount += row._sum.bet || 0;
-        gameMap[gameId].totalBets += row._count._all;
-      }
-  
-      if (row.type === 2) {
-        gameMap[gameId].totalPayoutAmount += row._sum.bet || 0;
-      }
-    }
-  
-    // finalize
-    const games = Object.values(gameMap).map((g: any) => {
-      const netProfit = g.totalBetAmount - g.totalPayoutAmount;
-      return {
-        ...g,
-        netProfit,
-        profitPercentage: g.totalBetAmount > 0
-          ? +(netProfit / g.totalBetAmount * 100).toFixed(2)
-          : 0
-      };
-    });
-  
-    // overall summary
-    const summary = games.reduce(
-      (acc, g) => {
-        acc.totalBetAmount += g.totalBetAmount;
-        acc.totalPayoutAmount += g.totalPayoutAmount;
-        acc.totalBets += g.totalBets;
-        acc.netProfit += g.netProfit;
-        return acc;
-      },
-      {
-        totalBetAmount: 0,
-        totalPayoutAmount: 0,
-        netProfit: 0,
-        totalBets: 0
-      }
-    );
-  
+    const { games, summary } = await this.betStats.profitByGame([appKey]);
     return {
       appKey,
       summary: {
         ...summary,
-        profitPercentage:
-          summary.totalBetAmount > 0
-            ? +(summary.netProfit / summary.totalBetAmount * 100).toFixed(2)
-            : 0
+        houseProfitPercent: summary.profitPercentage,
       },
-      games
+      games,
+    };
+  }
+
+  public async realtimeRtp(appKey: string, gameId?: number) {
+    const { games, summary } = await this.betStats.profitByGame([appKey]);
+    const filteredGames =
+      gameId != null ? games.filter((g) => g.gameId === Number(gameId)) : games;
+    const filteredSummary =
+      gameId != null ? summarizeGames(filteredGames) : summary;
+
+    const settings = await masterPrisma.gameSettings.findMany({
+      where: { appKey },
+    });
+    const settingsByGameId = new Map(
+      settings.map((s) => [s.gameId, s]),
+    );
+
+    const gamesWithSettings = filteredGames.map((g) => {
+      const setting = settingsByGameId.get(g.gameId);
+      return {
+        ...g,
+        configuredSettings: setting
+          ? {
+              maxBetLimit: setting.maxBetLimit,
+              winningPercentage: setting.winningPercentage,
+              winningMultiplier: setting.winningMultiplier,
+              currentRoundID: setting.currentRoundID,
+            }
+          : null,
+      };
+    });
+
+    const topUsers = await this.betStats.profitByUser([appKey], 'Bet', 20);
+
+    return {
+      appKey,
+      gameId: gameId ?? null,
+      summary: {
+        ...filteredSummary,
+        houseProfitPercent: filteredSummary.profitPercentage,
+      },
+      games: gamesWithSettings,
+      topUsers,
+    };
+  }
+
+  public async overallReport(appKey: string) {
+    const usersTotal = await masterPrisma.user.count({ where: { appKey } });
+    const stats = await this.gameStatistics(appKey);
+    return {
+      appKey,
+      usersTotal,
+      summary: stats.summary,
+      perGame: stats.games,
+    };
+  }
+
+  public async usersByAppKey(appKey: string) {
+    const users = await masterPrisma.user.findMany({
+      where: { appKey },
+      orderBy: { createdAt: 'desc' },
+    });
+    return { appKey, total: users.length, users };
+  }
+
+  public async betsByAppKey(appKey: string, limit = 10000) {
+    const { rows, totals } = await this.betStats.betLogTotals(
+      [appKey],
+      'Bet',
+      limit,
+    );
+    return {
+      appKey,
+      limit,
+      totals,
+      rows,
+    };
+  }
+
+  public async billingReport(body: {
+    organizationId: number;
+    appKeyMode: 'production' | 'testing' | 'both';
+    table: 'Bet' | 'AllBet';
+    from: string;
+    to: string;
+    organizationProfitPercent?: number;
+    companyProfitPercent?: number;
+    discountPercent?: number;
+  }) {
+    const org = await this.master.organization.findUnique({
+      where: { id: body.organizationId },
+    });
+    if (!org) {
+      throw new Error(`Organization not found: ${body.organizationId}`);
+    }
+
+    const enriched = enrichOrganization(org);
+    const appKeys = resolveAppKeysForOrg(enriched, body.appKeyMode);
+    if (appKeys.length === 0) {
+      throw new Error(
+        'No appKey configured for this organization. Add mapping in org-metadata.config.ts',
+      );
+    }
+
+    const from = new Date(body.from);
+    from.setHours(0, 0, 0, 0);
+    const toExclusive = new Date(body.to);
+    toExclusive.setHours(23, 59, 59, 999);
+    toExclusive.setMilliseconds(toExclusive.getMilliseconds() + 1);
+
+    const orgProfitPercent =
+      body.organizationProfitPercent ??
+      enriched.organization_profit_percent ??
+      80;
+    const companyProfitPercent =
+      body.companyProfitPercent ?? enriched.company_profit_percent ?? 20;
+    const discountPercent = body.discountPercent ?? 0;
+    const coinRatio = enriched.one_dollar_gold_coins ?? 10000;
+
+    const perDay = await this.betStats.dailyAggregates(
+      appKeys,
+      from,
+      toExclusive,
+      body.table,
+    );
+
+    const perDayWithSplit = perDay.map((day) => {
+      const discountedProfitCoins = Math.round(
+        day.profitCoins * (1 - discountPercent / 100),
+      );
+      const organizationProfitCoins = Math.round(
+        discountedProfitCoins * (orgProfitPercent / 100),
+      );
+      const companyProfitCoins =
+        discountedProfitCoins - organizationProfitCoins;
+      return {
+        ...day,
+        discountedProfitCoins,
+        organizationProfitCoins,
+        companyProfitCoins,
+      };
+    });
+
+    const perDayGamePlayer = await this.betStats.perDayGamePlayer(
+      appKeys,
+      from,
+      toExclusive,
+      body.table,
+    );
+
+    const perGame = await this.betStats.profitByGameInRange(
+      appKeys,
+      from,
+      toExclusive,
+      body.table,
+    );
+
+    const totalBetCoins = perDay.reduce((s, d) => s + d.totalBetCoins, 0);
+    const customerWinCoins = perDay.reduce(
+      (s, d) => s + d.customerWinCoins,
+      0,
+    );
+    const profitCoins = totalBetCoins - customerWinCoins;
+    const rtpPercent =
+      totalBetCoins > 0
+        ? +((customerWinCoins / totalBetCoins) * 100).toFixed(2)
+        : 0;
+    const discountedProfitCoins = Math.round(
+      profitCoins * (1 - discountPercent / 100),
+    );
+    const organizationProfitCoins = Math.round(
+      discountedProfitCoins * (orgProfitPercent / 100),
+    );
+    const companyProfitCoins =
+      discountedProfitCoins - organizationProfitCoins;
+
+    const toUsd = (coins: number) =>
+      coinRatio > 0 ? +(coins / coinRatio).toFixed(2) : 0;
+
+    return {
+      organization: enriched,
+      appKeys,
+      orgProfitPercent,
+      companyProfitPercent,
+      discountPercent,
+      oneDollarGoldCoins: coinRatio,
+      perDay: perDayWithSplit,
+      perDayGamePlayer,
+      perGame,
+      totals: {
+        totalBetCoins,
+        customerWinCoins,
+        profitCoins,
+        rtpPercent,
+        houseProfitPercent:
+          totalBetCoins > 0
+            ? +((profitCoins / totalBetCoins) * 100).toFixed(2)
+            : 0,
+        discountedProfitCoins,
+        organizationProfitCoins,
+        companyProfitCoins,
+        profitUsd: toUsd(profitCoins),
+        organizationProfitUsd: toUsd(organizationProfitCoins),
+        companyProfitUsd: toUsd(companyProfitCoins),
+      },
     };
   }
   // Clear 
